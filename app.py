@@ -12,8 +12,23 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
+
 SHEET_ID = "1Yjw5dLapgWWHrVy0zGJ1pBYmJWVu0IKkuhoYOiE5ZtY"
-DRIVE_FOLDER_ID = "1MmSrGm3Ml5GNXz6W3pxIGiUANMBhcpF0"   
+DRIVE_FOLDER_ID = "1MmSrGm3Ml5GNXz6W3pxIGiUANMBhcpF0" 
+APPROVER_EMAIL = "gangsrishti213@gmail.com"
+
+if not st.user.is_logged_in:
+    st.login()
+    st.stop()
+
+current_user_email = st.user.email
+current_user_name = st.user.name
+
+is_approver = (current_user_email == APPROVER_EMAIL)
+
+st.sidebar.write(f"Logged in as: {current_user_name} ({current_user_email})")
+if st.sidebar.button("Log out"):
+    st.logout()  
 
 
 @st.cache_resource
@@ -57,9 +72,13 @@ def load_leave_requests():
 st.sidebar.title("📋 Leave Management")
 page = st.sidebar.radio("Navigate", ["Dashboard", "Apply for Leave", "My Leave Requests", "Profile"])
 
+if is_approver:
+    st.title(f"Hello {current_user_name},")
+    st.write("Approver dashboard — coming next.")
+
 # --- Dashboard page ---
-if page == "Dashboard":
-    st.title("Good Morning, Srishti! 👋")
+elif page == "Dashboard" and not is_approver:
+    st.title(f"Good Morning, {current_user_name}! 👋")
     st.write("Here's a quick overview of your leave requests and status.")
 
     records = load_leave_requests()
@@ -117,7 +136,7 @@ elif page == "Apply for Leave":
 
                 sheet.append_row([
                     new_id,
-                    "Srishti Gangwar",  # placeholder until real login is built in Milestone 5
+                    current_user_name,  # placeholder until real login is built in Milestone 5
                     leave_type,
                     str(start_date),
                     str(end_date),
