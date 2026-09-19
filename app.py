@@ -68,13 +68,62 @@ def load_leave_requests():
     return sheet.get_all_records()
 
 
+def update_status(request_id, new_status):
+    sheet = get_sheet()
+    cell = sheet.find(request_id)
+    sheet.update_cell(cell.row, 7, new_status)
+
+
 # --- Sidebar navigation (now functional) ---
 st.sidebar.title("📋 Leave Management")
 page = st.sidebar.radio("Navigate", ["Dashboard", "Apply for Leave", "My Leave Requests", "Profile"])
 
+
+
 if is_approver:
     st.title(f"Hello {current_user_name},")
-    st.write("Approver dashboard — coming next.")
+    st.write("Here's the latest overview of team leave requests.")
+
+    records = load_leave_requests()
+    df = pd.DataFrame(records)
+
+    pending_count = (df["Status"] == "Pending").sum()
+    approved_count = (df["Status"] == "Approved").sum()
+    rejected_count = (df["Status"] == "Rejected").sum()
+    total_count = len(df)
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Pending", pending_count)
+    col2.metric("Approved", approved_count)
+    col3.metric("Rejected", rejected_count)
+    col4.metric("Total Requests", total_count)
+
+    st.subheader("All Leave Requests")
+    st.dataframe(df, use_container_width=True)
+
+    st.subheader("Pending Requests — Action Needed")
+    pending_df = df[df["Status"] == "Pending"]
+
+    if pending_df.empty:
+        st.write("No pending requests. 🎉")
+    else:
+        for _, row in pending_df.iterrows():
+            with st.container(border=True):
+                c1, c2, c3 = st.columns([3, 1, 1])
+                c1.write(
+                    f"**{row['Request ID']}** — {row['Employee Name']} — {row['Leave Type']} "
+                    f"({row['From']} to {row['To']}) — _{row['Reason']}_"
+                )
+                if c2.button("Approve", key=f"approve_{row['Request ID']}"):
+                    update_status(row["Request ID"], "Approved")
+                    st.cache_data.clear()
+                    st.rerun()
+                if c3.button("Reject", key=f"reject_{row['Request ID']}"):
+                    update_status(row["Request ID"], "Rejected")
+                    st.cache_data.clear()
+                    st.rerun()
+
+
 
 # --- Dashboard page ---
 elif page == "Dashboard" and not is_approver:
