@@ -65,11 +65,16 @@ if page == "Dashboard":
     records = load_leave_requests()
     df = pd.DataFrame(records)
 
+    pending_count = (df["Status"] == "Pending").sum()
+    approved_count = (df["Status"] == "Approved").sum()
+    rejected_count = (df["Status"] == "Rejected").sum()
+    total_count = len(df)
+
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Pending", 1)
-    col2.metric("Approved", 3)
-    col3.metric("Rejected", 0)
-    col4.metric("Total Requests", 4)
+    col1.metric("Pending", pending_count)
+    col2.metric("Approved", approved_count)
+    col3.metric("Rejected", rejected_count)
+    col4.metric("Total Requests", total_count)
 
     st.subheader("My Leave Requests")
     st.dataframe(df, use_container_width=True)
