@@ -5,6 +5,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import io
+import requests
 
 st.set_page_config(page_title="Leave Management Dashboard", layout="wide")
 
@@ -16,6 +17,7 @@ SCOPES = [
 SHEET_ID = "1Yjw5dLapgWWHrVy0zGJ1pBYmJWVu0IKkuhoYOiE5ZtY"
 DRIVE_FOLDER_ID = "1MmSrGm3Ml5GNXz6W3pxIGiUANMBhcpF0" 
 APPROVER_EMAIL = "gangsrishti213@gmail.com"
+APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyZya5u0JvzvzzJOeId7VXs02zDCYu5POQoZ--x-BkkwkW4etc9Ce25rS485njaeB6i/exec"
 
 if not st.user.is_logged_in:
     st.login()
@@ -72,6 +74,21 @@ def update_status(request_id, new_status):
     sheet = get_sheet()
     cell = sheet.find(request_id)
     sheet.update_cell(cell.row, 7, new_status)
+
+
+def notify_ranjeet(request_id, employee_name, leave_type, from_date, to_date, reason):
+    payload = {
+        "requestId": request_id,
+        "employeeName": employee_name,
+        "leaveType": leave_type,
+        "fromDate": from_date,
+        "toDate": to_date,
+        "reason": reason,
+    }
+    try:
+        requests.post(APPS_SCRIPT_URL, json=payload, timeout=10)
+    except Exception:
+        st.warning("Could not send the notification email, but your leave request was saved.")
 
 
 # --- Sidebar navigation (now functional) ---
@@ -194,6 +211,8 @@ elif page == "Apply for Leave":
                     other_description,
                 ])
 
+                notify_ranjeet(new_id, current_user_name, leave_type, str(start_date), str(end_date), reason)
+                
                 st.success(f"Leave request {new_id} submitted successfully!")
                 st.cache_data.clear()
 
