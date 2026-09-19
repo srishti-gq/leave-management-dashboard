@@ -1,32 +1,129 @@
 import streamlit as st
 import pandas as pd
+import gspread
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+import io
 
 st.set_page_config(page_title="Leave Management Dashboard", layout="wide")
 
-# --- Sidebar navigation (not clickable/functional yet — that comes later) ---
-st.sidebar.title("📋 Leave Management")
-st.sidebar.radio("Navigate", ["Dashboard", "Apply for Leave", "My Leave Requests", "Profile"])
-
-# --- Page header ---
-st.title("Good Morning, Srishti! 👋")
-st.write("Here's a quick overview of your leave requests and status.")
-
-# --- Stat cards ---
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Pending", 1)
-col2.metric("Approved", 3)
-col3.metric("Rejected", 0)
-col4.metric("Total Requests", 4)
-
-# --- Leave requests table (fake placeholder data for now) ---
-st.subheader("My Leave Requests")
-
-leave_requests = [
-    {"Request ID": "LR004", "Leave Type": "Personal", "From": "20 Sep 2025", "To": "22 Sep 2025", "Reason": "Personal work", "Status": "Pending", "Applied On": "16 Sep 2025"},
-    {"Request ID": "LR003", "Leave Type": "Personal", "From": "10 Sep 2025", "To": "12 Sep 2025", "Reason": "Family function", "Status": "Approved", "Applied On": "08 Sep 2025"},
-    {"Request ID": "LR002", "Leave Type": "Sick", "From": "02 Sep 2025", "To": "03 Sep 2025", "Reason": "Health issue", "Status": "Approved", "Applied On": "01 Sep 2025"},
-    {"Request ID": "LR001", "Leave Type": "Personal", "From": "25 Aug 2025", "To": "26 Aug 2025", "Reason": "Personal work", "Status": "Approved", "Applied On": "24 Aug 2025"},
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
 ]
+SHEET_ID = "1Yjw5dLapgWWHrVy0zGJ1pBYmJWVu0IKkuhoYOiE5ZtY"
+DRIVE_FOLDER_ID = "1MmSrGm3Ml5GNXz6W3pxIGiUANMBhcpF0"   
 
-df = pd.DataFrame(leave_requests)
-st.dataframe(df, use_container_width=True)
+
+@st.cache_resource
+def get_sheet():
+    creds = Credentials.from_service_account_file("secrets/service_account.json", scopes=SCOPES)
+    client = gspread.authorize(creds)
+    return client.open_by_key(SHEET_ID).sheet1
+
+@st.cache_resource
+def get_drive_service():
+    creds = Credentials.from_service_account_file("secrets/service_account.json", scopes=SCOPES)
+    return build("drive", "v3", credentials=creds)
+
+
+def upload_document(uploaded_file):
+    drive_service = get_drive_service()
+
+    file_metadata = {"name": uploaded_file.name, "parents": [DRIVE_FOLDER_ID]}
+    media = MediaIoBaseUpload(io.BytesIO(uploaded_file.getvalue()), mimetype=uploaded_file.type)
+
+    uploaded = drive_service.files().create(
+        body=file_metadata, media_body=media, fields="id", supportsAllDrives=True
+    ).execute()
+    file_id = uploaded["id"]
+
+    drive_service.permissions().create(
+        fileId=file_id, body={"type": "anyone", "role": "reader"}, supportsAllDrives=True
+    ).execute()
+
+    file_info = drive_service.files().get(fileId=file_id, fields="webViewLink", supportsAllDrives=True).execute()
+    return file_info["webViewLink"]
+
+
+@st.cache_data(ttl=30)
+def load_leave_requests():
+    sheet = get_sheet()
+    return sheet.get_all_records()
+
+
+# --- Sidebar navigation (now functional) ---
+st.sidebar.title("📋 Leave Management")
+page = st.sidebar.radio("Navigate", ["Dashboard", "Apply for Leave", "My Leave Requests", "Profile"])
+
+# --- Dashboard page ---
+if page == "Dashboard":
+    st.title("Good Morning, Srishti! 👋")
+    st.write("Here's a quick overview of your leave requests and status.")
+
+    records = load_leave_requests()
+    df = pd.DataFrame(records)
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Pending", 1)
+    col2.metric("Approved", 3)
+    col3.metric("Rejected", 0)
+    col4.metric("Total Requests", 4)
+
+    st.subheader("My Leave Requests")
+    st.dataframe(df, use_container_width=True)
+
+# --- Apply for Leave page ---
+elif page == "Apply for Leave":
+    st.title("Apply for Leave")
+
+    leave_types = ["Planned Leave", "Sick Leave", "Emergency Leave", "Personal Leave", "Other"]
+    leave_type = st.selectbox("Leave Type", leave_types)
+
+    other_description = ""
+    if leave_type == "Other":
+        other_description = st.text_input("Please describe this leave type (required)")
+
+    with st.form("apply_leave_form"):
+        start_date = st.date_input("Start Date")
+        end_date = st.date_input("End Date")
+        reason = st.text_area("Reason")
+        uploaded_file = st.file_uploader(
+            "Attach supporting document (optional)",
+            type=["pdf", "png", "jpg", "jpeg", "docx"],
+        )
+        submitted = st.form_submit_button("Submit")
+
+        if submitted:
+            if leave_type == "Other" and not other_description.strip():
+                st.error("Please provide a description for 'Other' leave type before submitting.")
+            else:
+                document_link = ""
+                if uploaded_file is not None:
+                    try:
+                        document_link = upload_document(uploaded_file)
+                    except Exception:
+                        st.warning("Document upload isn't available on this test account yet (will work once we're on the real company account). Your leave request was still saved without the attachment.")
+
+                sheet = get_sheet()
+                existing_rows = sheet.get_all_records()
+                new_id = f"LR{len(existing_rows) + 1:03d}"
+
+                sheet.append_row([
+                    new_id,
+                    "Srishti Gangwar",  # placeholder until real login is built in Milestone 5
+                    leave_type,
+                    str(start_date),
+                    str(end_date),
+                    reason,
+                    "Pending",
+                    other_description,
+                ])
+
+                st.success(f"Leave request {new_id} submitted successfully!")
+                st.cache_data.clear()
+
+else:
+    st.title(page)
+    st.write("This page isn't built yet — coming in a later milestone.")
