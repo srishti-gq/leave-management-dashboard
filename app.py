@@ -6,6 +6,8 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import io
 import requests
+from datetime import date
+import altair as alt
 
 st.set_page_config(page_title="Leave Management Dashboard", layout="wide")
 
@@ -96,6 +98,29 @@ def review_request_dialog(row):
         st.cache_data.clear()
         st.rerun()
 
+@st.dialog("Request Details")
+def view_request_details_dialog(row):
+    st.write(f"**Request ID:** {row['Request ID']}")
+    st.write(f"**Leave Type:** {row['Leave Type']}")
+    if row["Leave Type"] == "Other" and row.get("Other Description"):
+        st.write(f"**Description:** {row['Other Description']}")
+    st.write(f"**From:** {row['From']}  **To:** {row['To']}")
+    st.write(f"**Reason:** {row['Reason']}")
+    st.write(f"**Status:** {row['Status']}")
+    st.write(f"**Applied On:** {row['Applied On']}")
+
+    if row.get("Document Link"):
+        st.markdown(f"[View Attached Document]({row['Document Link']})")
+    else:
+        st.write("**Document:** None attached")
+
+    if row["Status"] == "Pending":
+        st.divider()
+        if st.button("Withdraw Request", type="primary"):
+            update_status(row["Request ID"], "Withdrawn")
+            st.cache_data.clear()
+            st.rerun()
+
 
 def notify_ranjeet(request_id, employee_name, leave_type, from_date, to_date, reason):
     approve_link = f"{APPS_SCRIPT_URL}?action=approve&requestId={request_id}&token={APPROVAL_TOKEN}"
@@ -119,11 +144,17 @@ def notify_ranjeet(request_id, employee_name, leave_type, from_date, to_date, re
 
 # --- Sidebar navigation (now functional) ---
 st.sidebar.title("📋 Leave Management")
-page = st.sidebar.radio("Navigate", ["Dashboard", "Apply for Leave", "My Leave Requests", "Profile"])
-
-
 
 if is_approver:
+    nav_options = ["Dashboard", "All Leave Requests", "Team Overview", "Profile"]
+else:
+    nav_options = ["Dashboard", "Apply for Leave", "My Leave Requests", "Profile"]
+
+page = st.sidebar.radio("Navigate", nav_options)
+
+
+
+if is_approver and page == "Dashboard":
     st.title(f"Hello {current_user_name},")
     st.write("Here's the latest overview of team leave requests.")
 
@@ -135,48 +166,113 @@ if is_approver:
     rejected_count = (df["Status"] == "Rejected").sum()
     total_count = len(df)
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Pending", pending_count)
-    col2.metric("Approved", approved_count)
-    col3.metric("Rejected", rejected_count)
-    col4.metric("Total Requests", total_count)
 
-    st.subheader("All Leave Requests")
-    st.dataframe(df, use_container_width=True)
+    main_col, side_col = st.columns([3, 1])
+
+    with main_col:
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Pending", pending_count)
+        col2.metric("Approved", approved_count)
+        col3.metric("Rejected", rejected_count)
+        col4.metric("Total Requests", total_count)
+
+    with side_col:
+        st.write("**Leave Overview**")
+        status_counts = pd.DataFrame({
+            "Status": ["Approved", "Pending", "Rejected"],
+            "Count": [approved_count, pending_count, rejected_count],
+        })
+        donut = alt.Chart(status_counts).mark_arc(innerRadius=50).encode(
+            theta="Count",
+            color=alt.Color(
+                "Status",
+                scale=alt.Scale(domain=["Approved", "Pending", "Rejected"], range=["#2e7d32", "#f9a825", "#c62828"]),
+            ),
+            tooltip=["Status", "Count"],
+        )
+        st.altair_chart(donut, use_container_width=True)
+        st.caption(f"Total Requests: {total_count}")
+
+        st.write("**Recent Activity**")
+        recent = df.sort_values("Applied On", ascending=False).head(5)
+        for _, r in recent.iterrows():
+            st.write(f"• **{r['Employee Name']}** — {r['Leave Type']} — _{r['Status']}_")
 
 
-    st.subheader("Pending Requests — Action Needed")
-    pending_df = df[df["Status"] == "Pending"]
+elif is_approver and page == "All Leave Requests":
+    st.title("All Leave Requests")
 
-    if pending_df.empty:
-        st.write("No pending requests. 🎉")
-    else:
-        for _, row in pending_df.iterrows():
-            with st.container(border=True):
-                c1, c2, c3 = st.columns([3, 1, 1])
-                c1.write(
-                    f"**{row['Request ID']}** — {row['Employee Name']} — {row['Leave Type']} "
-                    f"({row['From']} to {row['To']}) — _{row['Reason']}_"
-                )
-                if c2.button("Approve", key=f"approve_{row['Request ID']}"):
-                    update_status(row["Request ID"], "Approved")
-                    st.cache_data.clear()
-                    st.rerun()
-                if c3.button("Reject", key=f"reject_{row['Request ID']}"):
-                    update_status(row["Request ID"], "Rejected")
-                    st.cache_data.clear()
-                    st.rerun()
+    records = load_leave_requests()
+    df = pd.DataFrame(records)
 
+    col1, col2, col3 = st.columns(3)
+    status_options = ["All"] + sorted(df["Status"].unique().tolist())
+    status_filter = col1.selectbox("Status", status_options)
+
+    leave_type_options = ["All"] + sorted(df["Leave Type"].unique().tolist())
+    leave_type_filter = col2.selectbox("Leave Type", leave_type_options)
+
+    employee_options = ["All"] + sorted(df["Employee Name"].unique().tolist())
+    employee_filter = col3.selectbox("Employee", employee_options)
+
+    filtered = df.copy()
+    if status_filter != "All":
+        filtered = filtered[filtered["Status"] == status_filter]
+    if leave_type_filter != "All":
+        filtered = filtered[filtered["Leave Type"] == leave_type_filter]
+    if employee_filter != "All":
+        filtered = filtered[filtered["Employee Name"] == employee_filter]
+
+    st.dataframe(
+        filtered[["Request ID", "Employee Name", "Leave Type", "From", "To", "Reason", "Status", "Applied On", "Document Link"]],
+        use_container_width=True,
+        column_config={"Document Link": st.column_config.LinkColumn("Document", display_text="Open")},
+    )
 
     st.subheader("Manage Requests")
 
-    request_ids = df["Request ID"].tolist()
-    selected_id = st.selectbox("Select a request to review", request_ids)
+    if filtered.empty:
+        st.write("No requests match these filters.")
+    else:
+        request_ids = filtered["Request ID"].tolist()
+        selected_id = st.selectbox("Select a request to review", request_ids)
 
-    if st.button("Review Selected Request"):
-        selected_row = df[df["Request ID"] == selected_id].iloc[0]
-        review_request_dialog(selected_row)
+        if st.button("Review Selected Request"):
+            selected_row = filtered[filtered["Request ID"] == selected_id].iloc[0]
+            review_request_dialog(selected_row)
 
+
+elif is_approver and page == "Team Overview":
+    st.title("Team Overview")
+    st.write("A quick look at leave activity across the team.")
+
+    records = load_leave_requests()
+    df = pd.DataFrame(records)
+
+    summary = df.groupby("Employee Name").agg(
+        total_requests=("Request ID", "count"),
+        pending=("Status", lambda s: (s == "Pending").sum()),
+        approved=("Status", lambda s: (s == "Approved").sum()),
+        rejected=("Status", lambda s: (s == "Rejected").sum()),
+    ).reset_index()
+
+    summary = summary.rename(columns={
+        "total_requests": "Total Requests",
+        "pending": "Pending",
+        "approved": "Approved",
+        "rejected": "Rejected",
+    })
+
+    st.subheader("Requests per Employee")
+    st.dataframe(summary, use_container_width=True)
+
+    st.subheader("Total Requests by Employee")
+    bar_chart = alt.Chart(summary).mark_bar().encode(
+        x=alt.X("Employee Name", sort="-y"),
+        y="Total Requests",
+        tooltip=["Employee Name", "Total Requests"],
+    )
+    st.altair_chart(bar_chart, use_container_width=True)
 
 
 # --- Dashboard page ---
@@ -200,6 +296,67 @@ elif page == "Dashboard" and not is_approver:
 
     st.subheader("My Leave Requests")
     st.dataframe(df, use_container_width=True)
+
+
+elif page == "My Leave Requests":
+    st.title("My Leave Requests")
+
+    records = load_leave_requests()
+    df = pd.DataFrame(records)
+    my_requests = df[df["Employee Name"] == current_user_name].copy()
+
+    col1, col2, col3 = st.columns(3)
+    status_options = ["All"] + sorted(my_requests["Status"].unique().tolist())
+    status_filter = col1.selectbox("Status", status_options)
+
+    leave_type_options = ["All"] + sorted(my_requests["Leave Type"].unique().tolist())
+    leave_type_filter = col2.selectbox("Leave Type", leave_type_options)
+
+    date_range = col3.date_input("Applied Date Range", value=())
+
+    filtered = my_requests.copy()
+    if status_filter != "All":
+        filtered = filtered[filtered["Status"] == status_filter]
+    if leave_type_filter != "All":
+        filtered = filtered[filtered["Leave Type"] == leave_type_filter]
+    if len(date_range) == 2:
+        start_d, end_d = date_range
+        filtered = filtered[
+            (pd.to_datetime(filtered["Applied On"]) >= pd.to_datetime(start_d))
+            & (pd.to_datetime(filtered["Applied On"]) <= pd.to_datetime(end_d))
+        ]
+
+    st.dataframe(
+        filtered[["Request ID", "Leave Type", "From", "To", "Reason", "Status", "Applied On", "Document Link"]],
+        use_container_width=True,
+        column_config={"Document Link": st.column_config.LinkColumn("Document", display_text="Open")},
+    )
+
+    if filtered.empty:
+        st.write("No requests match these filters.")
+    else:
+        selected_id = st.selectbox("Select a request to view details", filtered["Request ID"].tolist())
+        if st.button("View Details"):
+            selected_row = filtered[filtered["Request ID"] == selected_id].iloc[0]
+            view_request_details_dialog(selected_row)
+
+
+elif page == "Profile":
+    st.title("My Profile")
+
+    profile_picture = st.user.get("picture")
+
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        if profile_picture:
+            st.image(profile_picture, width=120)
+    with col2:
+        st.subheader(current_user_name)
+        st.write(f"**Email:** {current_user_email}")
+        st.write(f"**Role:** {'Approver' if is_approver else 'Employee'}")
+        st.write("**Team:** Credit & Underwriting")
+
+
 
 # --- Apply for Leave page ---
 elif page == "Apply for Leave":
@@ -239,13 +396,15 @@ elif page == "Apply for Leave":
 
                 sheet.append_row([
                     new_id,
-                    current_user_name,  # placeholder until real login is built in Milestone 5
+                    current_user_name,
                     leave_type,
                     str(start_date),
                     str(end_date),
                     reason,
                     "Pending",
                     other_description,
+                    document_link,
+                    str(date.today()),
                 ])
 
                 notify_ranjeet(new_id, current_user_name, leave_type, str(start_date), str(end_date), reason)
