@@ -11,6 +11,46 @@ import altair as alt
 
 st.set_page_config(page_title="Leave Management Dashboard", layout="wide")
 
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"] {
+        background-color: #0F1A3D;
+    }
+    [data-testid="stSidebar"] * {
+        color: #F5F7FA !important;
+    }
+    [data-testid="stSidebar"] [role="radiogroup"] label {
+        display: block;
+        padding: 10px 14px;
+        border-radius: 8px;
+        margin-bottom: 4px;
+    }
+    [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
+        background-color: #3B7DFF;
+    }
+    [data-testid="stSidebar"] [role="radiogroup"] label div:first-child {
+        display: none;
+    }
+    [data-testid="stSidebarContent"] {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+    }
+    [data-testid="stSidebarContent"] > div:last-child {
+        margin-top: auto;
+    }
+    [data-testid="stDataFrame"] {
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
@@ -31,9 +71,18 @@ current_user_name = st.user.name
 
 is_approver = (current_user_email == APPROVER_EMAIL)
 
-st.sidebar.write(f"Logged in as: {current_user_name} ({current_user_email})")
-if st.sidebar.button("Log out"):
-    st.logout()  
+def render_top_bar():
+    profile_picture = st.user.get("picture")
+    role_label = "Approver" if is_approver else "Employee"
+    left, avatar_col, name_col = st.columns([6, 1, 2])
+    with avatar_col:
+        if profile_picture:
+            st.image(profile_picture, width=36)
+    with name_col:
+        st.write(f"**{current_user_name}**")
+        st.caption(role_label)
+
+render_top_bar()
 
 
 @st.cache_resource
@@ -141,6 +190,30 @@ def notify_ranjeet(request_id, employee_name, leave_type, from_date, to_date, re
     except Exception:
         st.warning("Could not send the notification email, but your leave request was saved.")
 
+def render_stat_card(icon, label, value, subtitle, bg_color, icon_color):
+    st.markdown(
+        f"""
+        <div style="background:{bg_color}; border:1px solid rgba(0,0,0,0.06); border-radius:12px; padding:16px 20px; min-height:110px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:600; color:#333;">{label}</span>
+                <div style="background:{icon_color}; color:white; width:32px; height:32px; min-width:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0;">{icon}</div>
+            </div>
+            <div style="font-size:26px; font-weight:bold; margin-top:8px; color:#111;">{value}</div>
+            <div style="font-size:12px; color:#777; margin-top:4px;">{subtitle}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+def style_status(val):
+    colors = {
+        "Pending": "background-color:#FFF3D6; color:#B7791F; font-weight:600;",
+        "Approved": "background-color:#DCF5E5; color:#1E7E34; font-weight:600;",
+        "Rejected": "background-color:#FDE3E3; color:#C0392B; font-weight:600;",
+        "Withdrawn": "background-color:#E5E7EB; color:#4B5563; font-weight:600;",
+    }
+    return colors.get(val, "")
+
 
 # --- Sidebar navigation (now functional) ---
 st.sidebar.title("📋 Leave Management")
@@ -151,6 +224,13 @@ else:
     nav_options = ["Dashboard", "Apply for Leave", "My Leave Requests", "Profile"]
 
 page = st.sidebar.radio("Navigate", nav_options)
+
+st.sidebar.divider()
+with st.sidebar.container():
+    st.write(f"**{current_user_name}**")
+    st.caption(current_user_email)
+    if st.button("Log out"):
+        st.logout()
 
 
 
@@ -167,36 +247,41 @@ if is_approver and page == "Dashboard":
     total_count = len(df)
 
 
-    main_col, side_col = st.columns([3, 1])
+    main_col, side_col = st.columns([3, 2])
 
     with main_col:
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Pending", pending_count)
-        col2.metric("Approved", approved_count)
-        col3.metric("Rejected", rejected_count)
-        col4.metric("Total Requests", total_count)
+        with col1:
+            render_stat_card("🕐", "Pending", pending_count, "Request awaiting approval", "#FFF3D6", "#F5A623")
+        with col2:
+            render_stat_card("✅", "Approved", approved_count, "Successfully approved", "#DCF5E5", "#34A853")
+        with col3:
+            render_stat_card("❌", "Rejected", rejected_count, "No rejected requests", "#FDE3E3", "#EA4335")
+        with col4:
+            render_stat_card("📅", "Total Requests", total_count, "All time requests", "#DCEAFB", "#4285F4")
 
     with side_col:
-        st.write("**Leave Overview**")
-        status_counts = pd.DataFrame({
-            "Status": ["Approved", "Pending", "Rejected"],
-            "Count": [approved_count, pending_count, rejected_count],
-        })
-        donut = alt.Chart(status_counts).mark_arc(innerRadius=50).encode(
-            theta="Count",
-            color=alt.Color(
-                "Status",
-                scale=alt.Scale(domain=["Approved", "Pending", "Rejected"], range=["#2e7d32", "#f9a825", "#c62828"]),
-            ),
-            tooltip=["Status", "Count"],
-        )
-        st.altair_chart(donut, use_container_width=True)
-        st.caption(f"Total Requests: {total_count}")
+        with st.container(border=True):
+            st.write("**Leave Overview**")
+            status_counts = pd.DataFrame({
+                "Status": ["Approved", "Pending", "Rejected"],
+                "Count": [approved_count, pending_count, rejected_count],
+            })
+            base = alt.Chart(status_counts).encode(theta=alt.Theta("Count", stack=True))
+            arc = base.mark_arc(innerRadius=50, outerRadius=80).encode(
+                color=alt.Color(
+                    "Status",
+                    scale=alt.Scale(domain=["Approved", "Pending", "Rejected"], range=["#2e7d32", "#f9a825", "#c62828"]),
+                ),
+                tooltip=["Status", "Count"],
+            )
+            center_text = alt.Chart(pd.DataFrame({"label": [str(total_count)]})).mark_text(size=24, fontWeight="bold", color="#111").encode(text="label")
+            st.altair_chart(arc + center_text, use_container_width=True)
+            st.caption(f"Total Requests: {total_count}")
 
-        st.write("**Recent Activity**")
-        recent = df.sort_values("Applied On", ascending=False).head(5)
-        for _, r in recent.iterrows():
-            st.write(f"• **{r['Employee Name']}** — {r['Leave Type']} — _{r['Status']}_")
+    with st.container(border=True):
+        st.subheader("All Leave Requests")
+        st.dataframe(df.style.map(style_status, subset=["Status"]), use_container_width=True)
 
 
 elif is_approver and page == "All Leave Requests":
@@ -224,10 +309,10 @@ elif is_approver and page == "All Leave Requests":
         filtered = filtered[filtered["Employee Name"] == employee_filter]
 
     st.dataframe(
-        filtered[["Request ID", "Employee Name", "Leave Type", "From", "To", "Reason", "Status", "Applied On", "Document Link"]],
-        use_container_width=True,
-        column_config={"Document Link": st.column_config.LinkColumn("Document", display_text="Open")},
-    )
+    filtered[["Request ID", "Employee Name", "Leave Type", "From", "To", "Reason", "Status", "Applied On", "Document Link"]].style.map(style_status, subset=["Status"]),
+    use_container_width=True,
+    column_config={"Document Link": st.column_config.LinkColumn("Document", display_text="Open")},
+)
 
     st.subheader("Manage Requests")
 
@@ -289,13 +374,17 @@ elif page == "Dashboard" and not is_approver:
     total_count = len(df)
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Pending", pending_count)
-    col2.metric("Approved", approved_count)
-    col3.metric("Rejected", rejected_count)
-    col4.metric("Total Requests", total_count)
+    with col1:
+        render_stat_card("🕐", "Pending", pending_count, "Request awaiting approval", "#FFF3D6", "#F5A623")
+    with col2:
+        render_stat_card("✅", "Approved", approved_count, "Successfully approved", "#DCF5E5", "#34A853")
+    with col3:
+        render_stat_card("❌", "Rejected", rejected_count, "No rejected requests", "#FDE3E3", "#EA4335")
+    with col4:
+        render_stat_card("📅", "Total Requests", total_count, "All time requests", "#DCEAFB", "#4285F4")
 
     st.subheader("My Leave Requests")
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df.style.map(style_status, subset=["Status"]), use_container_width=True)
 
 
 elif page == "My Leave Requests":
@@ -327,10 +416,10 @@ elif page == "My Leave Requests":
         ]
 
     st.dataframe(
-        filtered[["Request ID", "Leave Type", "From", "To", "Reason", "Status", "Applied On", "Document Link"]],
-        use_container_width=True,
-        column_config={"Document Link": st.column_config.LinkColumn("Document", display_text="Open")},
-    )
+    filtered[["Request ID", "Employee Name", "Leave Type", "From", "To", "Reason", "Status", "Applied On", "Document Link"]].style.map(style_status, subset=["Status"]),
+    use_container_width=True,
+    column_config={"Document Link": st.column_config.LinkColumn("Document", display_text="Open")},
+)
 
     if filtered.empty:
         st.write("No requests match these filters.")
