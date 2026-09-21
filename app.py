@@ -77,6 +77,26 @@ def update_status(request_id, new_status):
     sheet.update_cell(cell.row, 7, new_status)
 
 
+@st.dialog("Review Leave Request")
+def review_request_dialog(row):
+    st.write(f"**Request ID:** {row['Request ID']}")
+    st.write(f"**Employee:** {row['Employee Name']}")
+    st.write(f"**Leave Type:** {row['Leave Type']}")
+    st.write(f"**Dates:** {row['From']} to {row['To']}")
+    st.write(f"**Reason:** {row['Reason']}")
+    st.write(f"**Current Status:** {row['Status']}")
+
+    col1, col2 = st.columns(2)
+    if col1.button("Approve", use_container_width=True):
+        update_status(row["Request ID"], "Approved")
+        st.cache_data.clear()
+        st.rerun()
+    if col2.button("Reject", use_container_width=True):
+        update_status(row["Request ID"], "Rejected")
+        st.cache_data.clear()
+        st.rerun()
+
+
 def notify_ranjeet(request_id, employee_name, leave_type, from_date, to_date, reason):
     approve_link = f"{APPS_SCRIPT_URL}?action=approve&requestId={request_id}&token={APPROVAL_TOKEN}"
     reject_link = f"{APPS_SCRIPT_URL}?action=reject&requestId={request_id}&token={APPROVAL_TOKEN}"
@@ -124,6 +144,7 @@ if is_approver:
     st.subheader("All Leave Requests")
     st.dataframe(df, use_container_width=True)
 
+
     st.subheader("Pending Requests — Action Needed")
     pending_df = df[df["Status"] == "Pending"]
 
@@ -145,6 +166,16 @@ if is_approver:
                     update_status(row["Request ID"], "Rejected")
                     st.cache_data.clear()
                     st.rerun()
+
+
+    st.subheader("Manage Requests")
+
+    request_ids = df["Request ID"].tolist()
+    selected_id = st.selectbox("Select a request to review", request_ids)
+
+    if st.button("Review Selected Request"):
+        selected_row = df[df["Request ID"] == selected_id].iloc[0]
+        review_request_dialog(selected_row)
 
 
 
