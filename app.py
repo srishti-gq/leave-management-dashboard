@@ -473,7 +473,7 @@ def notify_ranjeet(request_id, employee_name, leave_type, from_date, to_date, re
         "rejectLink": reject_link,
     }
     try:
-        requests.post(APPS_SCRIPT_URL, json=payload, timeout=10)
+        requests.post(APPS_SCRIPT_URL, json=payload, timeout=25)
     except Exception as e:
         st.warning(f"Could not send the notification email, but your leave request was saved. (Debug: {e})")
 
