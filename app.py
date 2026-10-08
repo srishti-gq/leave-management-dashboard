@@ -474,8 +474,8 @@ def notify_ranjeet(request_id, employee_name, leave_type, from_date, to_date, re
     }
     try:
         requests.post(APPS_SCRIPT_URL, json=payload, timeout=10)
-    except Exception:
-        st.warning("Could not send the notification email, but your leave request was saved.")
+    except Exception as e:
+        st.warning(f"Could not send the notification email, but your leave request was saved. (Debug: {e})")
 
 def render_stat_card(icon, label, value, subtitle, bg_color, icon_color, size="normal"):
     padding = "20px 24px" if size == "large" else "16px 20px"
@@ -1362,7 +1362,7 @@ elif page == "Add Past Leave":
                         str(date.today()),
                     ])
 
-                    st.success(f"Past leave logged successfully ({selected_month}, {num_days} day(s)).")
+                    st.success(f"Past leave logged successfully ({start_date} to {end_date}, {num_days} day(s)).")
                     st.cache_data.clear()
 
 
