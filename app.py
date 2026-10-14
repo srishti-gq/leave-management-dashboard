@@ -261,8 +261,10 @@ st.markdown(
     color: #ffffff !important;
     font-weight: 700;
 }
-.cal-day.cal-day-today {
-    box-shadow: 0 0 0 2px #3B7DFF inset;
+[class*="st-key-calendar_box"] .cal-day.cal-day-today {
+    background: #3B7DFF;
+    color: #FFFFFF !important;
+    font-weight: 700;
 }
 [class*="st-key-calendar_box"] .cal-month {
     color: #111827 !important;
@@ -700,7 +702,7 @@ LEAVE_TYPE_ABBR = {
     "Personal Leave": "PRL",
 }
 
-def render_sidebar_calendar():
+def render_sidebar_calendar_heatmap():
     if "calendar_month_offset" not in st.session_state:
         st.session_state.calendar_month_offset = 0
 
@@ -787,6 +789,50 @@ def render_sidebar_calendar():
             unsafe_allow_html=True,
         )
 
+def render_sidebar_calendar_simple():
+    if "calendar_month_offset" not in st.session_state:
+        st.session_state.calendar_month_offset = 0
+
+    today = date.today()
+    total_months = (today.month - 1) + st.session_state.calendar_month_offset
+    view_year = today.year + total_months // 12
+    view_month = total_months % 12 + 1
+    month_name = date(view_year, view_month, 1).strftime("%B %Y")
+    is_current_month = (view_year == today.year and view_month == today.month)
+
+    with st.sidebar.container(key="calendar_box"):
+        nav_col1, nav_col2, nav_col3 = st.columns([1, 4, 1])
+        with nav_col1:
+            if st.button("‹", key="cal_prev"):
+                st.session_state.calendar_month_offset -= 1
+                st.rerun()
+        with nav_col2:
+            st.markdown(f'<div class="cal-month">{month_name}</div>', unsafe_allow_html=True)
+        with nav_col3:
+            if st.button("›", key="cal_next"):
+                st.session_state.calendar_month_offset += 1
+                st.rerun()
+
+        cal = calendar.Calendar(firstweekday=6)
+        weeks = cal.monthdayscalendar(view_year, view_month)
+        weekday_labels = ["S", "M", "T", "W", "T", "F", "S"]
+
+        header_html = "".join(f'<div class="cal-weekday">{d}</div>' for d in weekday_labels)
+        rows_html = ""
+        for week in weeks:
+            for day in week:
+                if day == 0:
+                    rows_html += '<div class="cal-day cal-day-empty">0</div>'
+                elif is_current_month and day == today.day:
+                    rows_html += f'<div class="cal-day cal-day-today">{day}</div>'
+                else:
+                    rows_html += f'<div class="cal-day">{day}</div>'
+
+        st.markdown(
+            f'<div class="cal-grid">{header_html}{rows_html}</div>',
+            unsafe_allow_html=True,
+        )
+
 # --- Sidebar navigation (now functional) ---
 st.sidebar.markdown(
     """
@@ -805,7 +851,10 @@ else:
 
 page = st.sidebar.radio("Navigate", nav_options, label_visibility="collapsed")
 
-render_sidebar_calendar()
+if is_approver:
+    render_sidebar_calendar_heatmap()
+else:
+    render_sidebar_calendar_simple()
 
 
 if "show_account_menu" not in st.session_state:
