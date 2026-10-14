@@ -370,6 +370,8 @@ st.markdown(
 [data-testid="stSidebar"] {
     border-radius: 0 10px 10px 0;
     box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+    width: 300px !important;
+    min-width: 300px !important;
 }
 
 [data-testid="stVerticalBlockBorderWrapper"] {
