@@ -195,7 +195,7 @@ st.markdown(
     margin-bottom: 0 !important;
 }
 [class*="st-key-calendar_box"] {
-    background: rgba(255,255,255,0.05);
+    background: #FFFFFF;
     border-radius: 12px;
     padding: 12px 16px 16px 16px;
     margin: 8px 0 20px 0;
@@ -208,6 +208,10 @@ st.markdown(
     padding: 0 !important;
     height: 26px !important;
     min-height: 26px !important;
+}
+[class*="st-key-calendar_box"] button,
+[class*="st-key-calendar_box"] button * {
+    color: #111827 !important;
 }
 .cal-month {
     font-size: 13px;
@@ -233,10 +237,132 @@ st.markdown(
     padding: 5px 0;
     border-radius: 50%;
 }
-.cal-day-today {
-    background: #3B7DFF;
-    color: white !important;
+.cal-day-wrapper {
+    position: relative;
+}
+.cal-day.heat-0 {
+    background: transparent;
+}
+.cal-day.heat-1 {
+    background: #FEF3C7;
+    color: #92400E !important;
+}
+.cal-day.heat-2 {
+    background: #FDBA74;
+    color: #7C2D12 !important;
+}
+.cal-day.heat-3 {
+    background: #FB923C;
+    color: #ffffff !important;
     font-weight: 700;
+}
+.cal-day.heat-4 {
+    background: #DC2626;
+    color: #ffffff !important;
+    font-weight: 700;
+}
+.cal-day.cal-day-today {
+    box-shadow: 0 0 0 2px #3B7DFF inset;
+}
+[class*="st-key-calendar_box"] .cal-month {
+    color: #111827 !important;
+}
+[class*="st-key-calendar_box"] .cal-weekday {
+    color: #6B7280 !important;
+}
+[class*="st-key-calendar_box"] .cal-day {
+    color: #111827 !important;
+}
+.cal-day-wrapper {
+    position: relative;
+}
+.cal-day.heat-0 {
+    background: transparent;
+}
+.cal-day.heat-low {
+    background: #86EFAC;
+    color: #065F46 !important;
+    font-weight: 700;
+}
+.cal-day.heat-mid {
+    background: #FDE68A;
+    color: #92400E !important;
+    font-weight: 700;
+}
+.cal-day.heat-high {
+    background: #FCA5A5;
+    color: #7F1D1D !important;
+    font-weight: 700;
+}
+.cal-day.cal-day-today {
+    box-shadow: 0 0 0 2px #3B7DFF inset;
+}
+.cal-tooltip {
+    display: none;
+    position: absolute;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1F2937;
+    padding: 8px 12px;
+    border-radius: 6px;
+    text-align: center;
+    z-index: 1000;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    width: max-content;
+    min-width: 130px;
+}
+.cal-tooltip::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 5px;
+    border-style: solid;
+    border-color: #1F2937 transparent transparent transparent;
+}
+.cal-day-wrapper:hover .cal-tooltip {
+    display: block;
+}
+.cal-tooltip-entry {
+    margin-bottom: 4px;
+}
+.cal-tooltip-entry:last-child {
+    margin-bottom: 0;
+}
+.cal-tooltip-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #FFFFFF !important;
+}
+.cal-tooltip-detail {
+    font-size: 11px;
+    color: #9CA3AF !important;
+}
+.cal-day-wrapper:hover .cal-tooltip {
+    display: block;
+}
+.cal-tooltip {
+    display: none;
+    position: absolute;
+    bottom: 110%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #111827;
+    color: #F5F7FA;
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    white-space: normal;
+    max-width: 150px;
+    text-align: left;
+    line-height: 1.5;
+    z-index: 1000;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+.cal-day-wrapper:hover .cal-tooltip {
+    display: block;
 }
 .cal-day-empty {
     visibility: hidden;
@@ -267,7 +393,17 @@ SCOPES = [
 
 SHEET_ID = "1mfb3VL-6bHoD9SPQdXhoyFl5lmBY5LwLxrosbYdE_6o"
 DRIVE_FOLDER_ID = "0AGQ8hSSgFX9SUk9PVA" 
-APPROVER_EMAIL = "ranjeet@grayquest.com"
+APPROVER_EMAILS = [
+    "nidhi.tigga@grayquest.com",
+    "raja.baslas@grayquest.com",
+    "ranjeet@grayquest.com",
+]
+
+ROLE_LABELS = {
+    "nidhi.tigga@grayquest.com": "Senior Credit Manager",
+    "raja.baslas@grayquest.com": "Senior Credit Manager",
+    "ranjeet@grayquest.com": "Credit & Risk HOD",
+}
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx5QJ04f-0IVWZNDIT21Aj8S92Z5Wip-PNIxHzphdwMiDfe4OVzue8a0h_y7PO9Cw3e/exec"
 APPROVAL_TOKEN = st.secrets["general"]["approval_token"]
 
@@ -278,10 +414,10 @@ if not st.user.is_logged_in:
 current_user_email = st.user.email
 current_user_name = st.user.name
 
-is_approver = (current_user_email == APPROVER_EMAIL)
+is_approver = (current_user_email in APPROVER_EMAILS)
 
 def render_top_bar():
-    role_label = "Approver" if is_approver else "Employee"
+    role_label = ROLE_LABELS.get(current_user_email, "Employee")
     search_placeholder = (
         "Search by employee name, ID or leave type..." if is_approver
         else "Search anything..."
@@ -555,6 +691,13 @@ def render_paginated_table(data, key_prefix, column_config=None, page_size=20):
                 st.session_state[page_key] += 1
                 st.rerun()
 
+LEAVE_TYPE_ABBR = {
+    "Planned Leave": "PL",
+    "Sick Leave": "SL",
+    "Emergency Leave": "EL",
+    "Personal Leave": "PRL",
+}
+
 def render_sidebar_calendar():
     if "calendar_month_offset" not in st.session_state:
         st.session_state.calendar_month_offset = 0
@@ -565,6 +708,22 @@ def render_sidebar_calendar():
     view_month = total_months % 12 + 1
     month_name = date(view_year, view_month, 1).strftime("%B %Y")
     is_current_month = (view_year == today.year and view_month == today.month)
+
+    records = load_leave_requests()
+    df = records_to_df(records)
+    approved = df[df["Status"] == "Approved"].copy()
+    approved["_From"] = pd.to_datetime(approved["From"], errors="coerce")
+    approved["_To"] = pd.to_datetime(approved["To"], errors="coerce")
+
+    day_info = {}
+    for _, r in approved.iterrows():
+        if pd.isna(r["_From"]) or pd.isna(r["_To"]):
+            continue
+        total_days = (r["_To"] - r["_From"]).days + 1
+        abbr = LEAVE_TYPE_ABBR.get(r["Leave Type"], r["Leave Type"][:2].upper())
+        for d in pd.date_range(r["_From"], r["_To"]):
+            if d.year == view_year and d.month == view_month:
+                day_info.setdefault(d.day, []).append((r["Employee Name"], abbr, total_days))
 
     with st.sidebar.container(key="calendar_box"):
         nav_col1, nav_col2, nav_col3 = st.columns([1, 4, 1])
@@ -588,17 +747,43 @@ def render_sidebar_calendar():
         for week in weeks:
             for day in week:
                 if day == 0:
-                    rows_html += '<div class="cal-day cal-day-empty">0</div>'
-                elif is_current_month and day == today.day:
-                    rows_html += f'<div class="cal-day cal-day-today">{day}</div>'
+                    rows_html += '<div class="cal-day-wrapper"><div class="cal-day cal-day-empty">0</div></div>'
                 else:
-                    rows_html += f'<div class="cal-day">{day}</div>'
+                    names = day_info.get(day, [])
+                    count = len(names)
+                    if count == 0:
+                        heat_class = "heat-0"
+                    elif count == 1:
+                        heat_class = "heat-low"
+                    elif count <= 3:
+                        heat_class = "heat-mid"
+                    else:
+                        heat_class = "heat-high"
+
+                    today_class = " cal-day-today" if (is_current_month and day == today.day) else ""
+
+                    if names:
+                        tooltip_body = "".join(
+                            f'<div class="cal-tooltip-entry">'
+                            f'<div class="cal-tooltip-name">{n}</div>'
+                            f'<div class="cal-tooltip-detail">({t} : {dcount} day{"s" if dcount != 1 else ""})</div>'
+                            f'</div>'
+                            for n, t, dcount in names
+                        )
+                    else:
+                        tooltip_body = '<div class="cal-tooltip-detail">No one on leave</div>'
+
+                    rows_html += (
+                        f'<div class="cal-day-wrapper">'
+                        f'<div class="cal-day {heat_class}{today_class}">{day}</div>'
+                        f'<div class="cal-tooltip">{tooltip_body}</div>'
+                        f'</div>'
+                    )
 
         st.markdown(
             f'<div class="cal-grid">{header_html}{rows_html}</div>',
             unsafe_allow_html=True,
         )
-
 
 # --- Sidebar navigation (now functional) ---
 st.sidebar.markdown(
