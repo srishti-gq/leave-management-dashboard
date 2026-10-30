@@ -400,12 +400,14 @@ DRIVE_FOLDER_ID = "0AGQ8hSSgFX9SUk9PVA"
 APPROVER_EMAILS = [
     "nidhi.tigga@grayquest.com",
     "raja.baslas@grayquest.com",
+    "anchal.goel@grayquest.com",
     "ranjeet@grayquest.com",
 ]
 
 ROLE_LABELS = {
     "nidhi.tigga@grayquest.com": "Senior Credit Manager",
     "raja.baslas@grayquest.com": "Senior Credit Manager",
+    "anchal.goel@grayquest.com": "Senior Credit Manager",
     "ranjeet@grayquest.com": "Credit & Risk HOD",
 }
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx5QJ04f-0IVWZNDIT21Aj8S92Z5Wip-PNIxHzphdwMiDfe4OVzue8a0h_y7PO9Cw3e/exec"
@@ -418,7 +420,37 @@ if not st.user.is_logged_in:
 current_user_email = st.user.email
 current_user_name = st.user.name
 
-is_approver = (current_user_email in APPROVER_EMAILS)
+is_actual_approver = (current_user_email in APPROVER_EMAILS)
+
+DUAL_ROLE_EMAILS = [
+    "nidhi.tigga@grayquest.com",
+    "raja.baslas@grayquest.com",
+    "anchal.goel@grayquest.com",
+]
+
+if current_user_email in DUAL_ROLE_EMAILS:
+    if "login_role_choice" not in st.session_state:
+        st.markdown(
+            """
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:65vh; text-align:center;">
+                <div style="font-size:24px; font-weight:800; color:#111827; margin-bottom:8px;">How would you like to log in?</div>
+                <div style="font-size:15px; color:#6B7280; max-width:360px; margin-bottom:24px;">Choose whether you want the Approver dashboard or your own Employee view this session.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        choice_col1, choice_col2, choice_col3 = st.columns([1, 1, 1])
+        with choice_col2:
+            if st.button("Continue as Approver", use_container_width=True):
+                st.session_state["login_role_choice"] = "Approver"
+                st.rerun()
+            if st.button("Continue as Employee", use_container_width=True):
+                st.session_state["login_role_choice"] = "Employee"
+                st.rerun()
+        st.stop()
+    is_approver = (st.session_state["login_role_choice"] == "Approver")
+else:
+    is_approver = is_actual_approver
 
 def render_top_bar():
     role_label = ROLE_LABELS.get(current_user_email, "Employee")
@@ -599,8 +631,13 @@ def view_request_details_dialog(row):
 
 
 def notify_ranjeet(request_id, employee_name, leave_type, from_date, to_date, reason):
-    approve_link = f"{APPS_SCRIPT_URL}?action=approve&requestId={request_id}&token={APPROVAL_TOKEN}"
-    reject_link = f"{APPS_SCRIPT_URL}?action=reject&requestId={request_id}&token={APPROVAL_TOKEN}"
+    approve_link = f"{APPROVAL_LINK_BASE_URL}?action=approve&requestId={request_id}&token={APPROVAL_TOKEN}"
+    reject_link = f"{APPROVAL_LINK_BASE_URL}?action=reject&requestId={request_id}&token={APPROVAL_TOKEN}"
+
+    if current_user_email in ("nidhi.tigga@grayquest.com", "raja.baslas@grayquest.com"):
+        notify_emails = "ranjeet@grayquest.com"
+    else:
+        notify_emails = "nidhi.tigga@grayquest.com,raja.baslas@grayquest.com,ranjeet@grayquest.com"
 
     payload = {
         "requestId": request_id,
@@ -611,6 +648,7 @@ def notify_ranjeet(request_id, employee_name, leave_type, from_date, to_date, re
         "reason": reason,
         "approveLink": approve_link,
         "rejectLink": reject_link,
+        "notifyEmails": notify_emails,
     }
     try:
         requests.post(APPS_SCRIPT_URL, json=payload, timeout=25)
@@ -700,6 +738,9 @@ LEAVE_TYPE_ABBR = {
     "Sick Leave": "SL",
     "Emergency Leave": "EL",
     "Personal Leave": "PRL",
+    "Half Day": "HD",
+    "Early Login": "ELI",
+    "Early Logout": "ELO",
 }
 
 def render_sidebar_calendar_heatmap():
@@ -1240,7 +1281,7 @@ elif is_approver and page == "Team Overview":
                 type_days["Percent"] = (type_days["Leave Days"] / total_days * 100).round(0).astype(int)
                 type_days["Legend Label"] = type_days["Leave Type"] + "   " + type_days["Leave Days"].astype(str) + " days"
 
-                professional_palette = ["#1E3A8A", "#2563EB", "#0EA5E9", "#0D9488", "#7C3AED", "#64748B"]
+                professional_palette = ["#1E3A8A", "#2563EB", "#0EA5E9", "#0D9488", "#7C3AED", "#64748B", "#D97706", "#DB2777"]
 
                 donut = alt.Chart(type_days).mark_arc(
                     innerRadius=60, outerRadius=105, cornerRadius=4, padAngle=0.015
@@ -1504,7 +1545,7 @@ elif page == "Apply for Leave":
     st.title("Apply for Leave")
 
     with st.container(border=True):
-        leave_types = ["Planned Leave", "Sick Leave", "Emergency Leave", "Personal Leave", "Other"]
+        leave_types = ["Planned Leave", "Sick Leave", "Emergency Leave", "Personal Leave", "Half Day", "Early Login", "Early Logout", "Other"]
         leave_type = st.selectbox("Leave Type", leave_types)
 
         other_description = ""
@@ -1560,7 +1601,7 @@ elif page == "Add Past Leave":
     st.write("Use this to log leave you've already taken in the past — it's recorded directly, no approval needed.")
 
     with st.container(border=True):
-        leave_types = ["Planned Leave", "Sick Leave", "Emergency Leave", "Personal Leave", "Other"]
+        leave_types = ["Planned Leave", "Sick Leave", "Emergency Leave", "Personal Leave", "Half Day", "Early Login", "Early Logout", "Other"]
         leave_type = st.selectbox("Leave Type", leave_types, key="past_leave_type")
 
         other_description = ""
