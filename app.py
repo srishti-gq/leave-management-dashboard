@@ -402,6 +402,7 @@ APPROVER_EMAILS = [
     "raja.baslas@grayquest.com",
     "anchal.goel@grayquest.com",
     "ranjeet@grayquest.com",
+    "srishti.gangwar@grayquest.com",
 ]
 
 ROLE_LABELS = {
@@ -409,8 +410,10 @@ ROLE_LABELS = {
     "raja.baslas@grayquest.com": "Senior Credit Manager",
     "anchal.goel@grayquest.com": "Senior Credit Manager",
     "ranjeet@grayquest.com": "Credit & Risk HOD",
+    "srishti.gangwar@grayquest.com": "Approver",
 }
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx5QJ04f-0IVWZNDIT21Aj8S92Z5Wip-PNIxHzphdwMiDfe4OVzue8a0h_y7PO9Cw3e/exec"
+APPROVAL_LINK_BASE_URL = "https://script.google.com/a/macros/grayquest.com/s/AKfycbxMAY1FLsU7KkJKkwfxpQLQlkcKiS_ro_XnnlcsATI_RKTAM30tz9ToC1Ohm2oZze4P/exec"
 APPROVAL_TOKEN = st.secrets["general"]["approval_token"]
 
 if not st.user.is_logged_in:
@@ -426,6 +429,7 @@ DUAL_ROLE_EMAILS = [
     "nidhi.tigga@grayquest.com",
     "raja.baslas@grayquest.com",
     "anchal.goel@grayquest.com",
+    "srishti.gangwar@grayquest.com",
 ]
 
 if current_user_email in DUAL_ROLE_EMAILS:
@@ -634,10 +638,10 @@ def notify_ranjeet(request_id, employee_name, leave_type, from_date, to_date, re
     approve_link = f"{APPROVAL_LINK_BASE_URL}?action=approve&requestId={request_id}&token={APPROVAL_TOKEN}"
     reject_link = f"{APPROVAL_LINK_BASE_URL}?action=reject&requestId={request_id}&token={APPROVAL_TOKEN}"
 
-    if current_user_email in ("nidhi.tigga@grayquest.com", "raja.baslas@grayquest.com"):
+    if current_user_email in APPROVER_EMAILS:
         notify_emails = "ranjeet@grayquest.com"
     else:
-        notify_emails = "nidhi.tigga@grayquest.com,raja.baslas@grayquest.com,ranjeet@grayquest.com"
+        notify_emails = ",".join(APPROVER_EMAILS)
 
     payload = {
         "requestId": request_id,
