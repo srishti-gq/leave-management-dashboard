@@ -1567,34 +1567,55 @@ elif page == "Apply for Leave":
                 if leave_type == "Other" and not other_description.strip():
                     st.error("Please provide a description for 'Other' leave type before submitting.")
                 else:
-                    document_link = ""
-                    if uploaded_file is not None:
-                        try:
-                            document_link = upload_document(uploaded_file)
-                        except Exception as e:
-                            st.error(f"Upload failed: {e}")
-
                     sheet = get_sheet()
                     existing_rows = sheet.get_all_records()
-                    new_id = f"LR{len(existing_rows) + 1:03d}"
+                    existing_df = records_to_df(existing_rows)
 
-                    sheet.append_row([
-                        new_id,
-                        current_user_name,
-                        leave_type,
-                        str(start_date),
-                        str(end_date),
-                        reason,
-                        "Pending",
-                        other_description,
-                        document_link,
-                        str(date.today()),
-                    ])
+                    my_pending = existing_df[
+                        (existing_df["Employee Name"] == current_user_name)
+                        & (existing_df["Status"] == "Pending")
+                    ].copy()
+                    my_pending["_From"] = pd.to_datetime(my_pending["From"], errors="coerce")
+                    my_pending["_To"] = pd.to_datetime(my_pending["To"], errors="coerce")
+                    overlapping = my_pending[
+                        (my_pending["_From"] <= pd.Timestamp(end_date))
+                        & (my_pending["_To"] >= pd.Timestamp(start_date))
+                    ]
 
-                    notify_ranjeet(new_id, current_user_name, leave_type, str(start_date), str(end_date), reason)
+                    if not overlapping.empty:
+                        clash = overlapping.iloc[0]
+                        st.error(
+                            f"You already have a pending request ({clash['Request ID']}) for "
+                            f"{clash['From']} to {clash['To']}. Please wait until it's approved or "
+                            f"rejected, or withdraw it from My Leave Requests, before applying for these dates again."
+                        )
+                    else:
+                        document_link = ""
+                        if uploaded_file is not None:
+                            try:
+                                document_link = upload_document(uploaded_file)
+                            except Exception as e:
+                                st.error(f"Upload failed: {e}")
 
-                    st.success(f"Leave request {new_id} submitted successfully!")
-                    st.cache_data.clear()
+                        new_id = f"LR{len(existing_rows) + 1:03d}"
+
+                        sheet.append_row([
+                            new_id,
+                            current_user_name,
+                            leave_type,
+                            str(start_date),
+                            str(end_date),
+                            reason,
+                            "Pending",
+                            other_description,
+                            document_link,
+                            str(date.today()),
+                        ])
+
+                        notify_ranjeet(new_id, current_user_name, leave_type, str(start_date), str(end_date), reason)
+
+                        st.success(f"Leave request {new_id} submitted successfully!")
+                        st.cache_data.clear()
 
 
 elif page == "Add Past Leave":
