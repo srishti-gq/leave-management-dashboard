@@ -6,6 +6,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import io
 import requests
+import re
 from datetime import date
 import calendar
 import altair as alt
@@ -582,10 +583,26 @@ def records_to_df(records):
     return pd.DataFrame(records)
 
 
+def next_request_id(existing_rows):
+    max_num = 0
+    for r in existing_rows:
+        m = re.fullmatch(r"LR(\d+)", str(r.get("Request ID", "")).strip())
+        if m:
+            max_num = max(max_num, int(m.group(1)))
+    return f"LR{max_num + 1:03d}"
+
+
 def update_status(request_id, new_status):
     sheet = get_sheet()
-    cell = sheet.find(request_id)
-    sheet.update_cell(cell.row, 7, new_status)
+    matches = sheet.findall(str(request_id), in_column=1)
+    if not matches:
+        raise ValueError(f"Request {request_id} was not found in the sheet.")
+    target = matches[0]
+    for cell in matches:
+        if sheet.cell(cell.row, 7).value == "Pending":
+            target = cell
+            break
+    sheet.update_cell(target.row, 7, new_status)
 
 
 @st.dialog("Review Leave Request")
@@ -1597,7 +1614,7 @@ elif page == "Apply for Leave":
                             except Exception as e:
                                 st.error(f"Upload failed: {e}")
 
-                        new_id = f"LR{len(existing_rows) + 1:03d}"
+                        new_id = next_request_id(existing_rows)
 
                         sheet.append_row([
                             new_id,
